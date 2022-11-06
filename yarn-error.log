@@ -1,0 +1,26 @@
+Arguments: 
+  /Users/guillermomac/.nvm/versions/node/v16.15.0/bin/node /usr/local/Cellar/yarn/1.22.19/libexec/bin/yarn.js add next
+
+PATH: 
+  /Users/guillermomac/opt/anaconda3/bin:/Users/guillermomac/opt/anaconda3/condabin:/opt/homebrew/opt/php@8.1/sbin:/opt/homebrew/opt/php@8.1/bin:/opt/homebrew/opt/php@8.1/sbin:/opt/homebrew/opt/php@8.1/bin:/opt/homebrew/opt/php@8.1/bin:/usr/local/opt/php@8.1/bin:/usr/local/opt/php@7.4/bin:/usr/local/opt/php@7.4/bin:/opt/homebrew/opt/php@8.1/bin:/usr/local/opt/php@8.0/sbin:/usr/local/opt/php@8.0/bin:/usr/local/opt/php@8.0/sbin:/usr/local/opt/php@8.0/sbin:/usr/local/opt/php@8.0/bin:/Users/guillermomac/.nvm/versions/node/v16.15.0/bin:/Users/guillermomac/Downloads/cocos2d-x-4.0/templates:/Users/guillermomac/Downloads:/Users/guillermomac/Downloads/cocos2d-x-4.0/tools/cocos2d-console/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/guillermomac/development/flutter/bin:/Users/guillermomac/Library/Android/sdk/tools/bin/sdkmanager:/usr/local/share/dotnet:~/.dotnet/tools:/Library/Apple/usr/bin:/Users/guillermomac/.fig/bin:/Users/guillermomac/.local/bin
+
+Yarn version: 
+  1.22.19
+
+Node version: 
+  16.15.0
+
+Platform: 
+  darwin x64
+
+Trace: 
+  Error: ENOENT: no such file or directory, lstat '/Users/guillermomac/Documents/dev/marianet/node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/noop-template.js.map'
+
+npm manifest: 
+  No manifest
+
+yarn manifest: 
+  No manifest
+
+Lockfile: 
+  No lockfile
