@@ -14,6 +14,7 @@ const {
 } = require("../services/queue");
 
 const QUEUE_PRINT = "/queue/simple/print";
+const QUEUE_ADD = "/queue/simple/add";
 
 const isMikrotikError = (result) => result instanceof Error || result?.message;
 
@@ -60,7 +61,7 @@ const explainForHuman = async ({
   }
 };
 
-const executeWriteCommand = async (
+const executeUpdateCommand = async (
   command,
   search,
   params,
@@ -98,7 +99,9 @@ const executeWriteCommand = async (
   }
 
   const mikrotikParams = {
-    ".id": `*${resolved.queue.id}`,
+    ".id": resolved.queue.id.startsWith("*")
+      ? resolved.queue.id
+      : `*${resolved.queue.id}`,
     ...params,
   };
 
@@ -151,6 +154,63 @@ const executeWriteCommand = async (
   };
 };
 
+const executeCreateCommand = async (command, params, explanation, instructions, history) => {
+  console.log("Creación MikroTik:", command, params);
+
+  const addResult = await services.execute(command, params);
+
+  if (isMikrotikError(addResult)) {
+    return {
+      status: 502,
+      body: {
+        explanation,
+        command,
+        error: "Error al crear la cola en MikroTik",
+        details: addResult.message || String(addResult),
+      },
+    };
+  }
+
+  let created = {
+    name: params.name,
+    target: params.target,
+    maxLimit: params["max-limit"] || null,
+    disabled: params.disabled || "false",
+  };
+
+  const printResult = await services.execute(QUEUE_PRINT);
+  if (!isMikrotikError(printResult)) {
+    const queues = formatQueueItems(printResult.data);
+    const matches = filterQueuesByName(queues, params.name);
+    if (matches.length > 0) {
+      created = matches[0];
+    }
+  }
+
+  const fallback = explanation || `Cliente "${params.name}" creado correctamente.`;
+
+  const naturalExplanation = await explainForHuman({
+    instructions,
+    command,
+    search: params.name,
+    action: "created",
+    data: [created],
+    history,
+    fallback,
+  });
+
+  return {
+    status: 200,
+    body: {
+      explanation: naturalExplanation,
+      command,
+      search: params.name,
+      action: "created",
+      data: [created],
+    },
+  };
+};
+
 const chat = async (req, res) => {
   const { instructions, history } = req.body;
 
@@ -182,7 +242,7 @@ const chat = async (req, res) => {
     }
 
     const commandDef = getCommandDef(command);
-    const paramsValidation = validateParams(command, aiResponse.params);
+    const paramsValidation = validateParams(command, aiResponse.params, { search });
 
     if (!paramsValidation.valid) {
       return res.status(400).json({
@@ -193,6 +253,17 @@ const chat = async (req, res) => {
     }
 
     if (commandDef.type === "write") {
+      if (commandDef.mode === "create" || command === QUEUE_ADD) {
+        const writeResponse = await executeCreateCommand(
+          command,
+          paramsValidation.params,
+          explanation,
+          instructions,
+          thread
+        );
+        return res.status(writeResponse.status).json(writeResponse.body);
+      }
+
       if (!search) {
         return res.status(400).json({
           explanation: "Se requiere el nombre del cliente para ejecutar esta acción.",
@@ -201,7 +272,7 @@ const chat = async (req, res) => {
         });
       }
 
-      const writeResponse = await executeWriteCommand(
+      const writeResponse = await executeUpdateCommand(
         command,
         search,
         paramsValidation.params,

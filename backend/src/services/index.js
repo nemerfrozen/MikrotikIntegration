@@ -28,8 +28,16 @@ const commandToRequest = (command, params) => {
 
     return {
       method: "PATCH",
-      path: `${normalized.replace(/\/set$/, "")}/${id}`,
+      path: `${normalized.replace(/\/set$/, "")}/${encodeURIComponent(id)}`,
       body,
+    };
+  }
+
+  if (command.endsWith("/add")) {
+    return {
+      method: "PUT",
+      path: normalized.replace(/\/add$/, ""),
+      body: { ...(params || {}) },
     };
   }
 

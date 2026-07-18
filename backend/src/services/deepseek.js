@@ -39,10 +39,29 @@ const safeParseJson = (content) => {
   }
 };
 
+const getApiKey = () => {
+  const raw = process.env.DEEPSEEK_API_KEY || "";
+  return raw.trim().replace(/^["']|["']$/g, "");
+};
+
+const describeFetchError = (error) => {
+  const code = error?.cause?.code || error?.code;
+  if (code === "ENOTFOUND") {
+    return "No se resolvió api.deepseek.com (DNS). Revisa internet o DNS.";
+  }
+  if (code === "ECONNREFUSED" || code === "ECONNRESET" || code === "ETIMEDOUT") {
+    return `Conexión bloqueada o interrumpida (${code}). Revisa firewall/proxy/VPN.`;
+  }
+  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ABORT_ERR") {
+    return "Timeout al conectar con DeepSeek. Revisa internet o proxy.";
+  }
+  return `No se pudo conectar con DeepSeek (${code || error.message}). Revisa internet, firewall o DEEPSEEK_API_KEY.`;
+};
+
 const callDeepSeek = async (messages, { json = false } = {}) => {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("DEEPSEEK_API_KEY no está configurada en el backend (.env)");
+    throw new Error("DEEPSEEK_API_KEY no está configurada en backend/.env");
   }
 
   const body = {
@@ -64,16 +83,18 @@ const callDeepSeek = async (messages, { json = false } = {}) => {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45000),
     });
   } catch (error) {
-    console.error("DeepSeek fetch error:", error.message);
-    throw new Error(
-      "No se pudo conectar con DeepSeek. Revisa internet, firewall o DEEPSEEK_API_KEY."
-    );
+    console.error("DeepSeek fetch error:", error.message, error.cause || "");
+    throw new Error(describeFetchError(error));
   }
 
   if (!response.ok) {
     const error = await response.text();
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("DEEPSEEK_API_KEY inválida o sin permiso. Revisa backend/.env");
+    }
     throw new Error(`DeepSeek API error: ${response.status} - ${error || "sin detalle"}`);
   }
 

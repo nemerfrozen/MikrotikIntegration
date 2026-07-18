@@ -7,10 +7,18 @@ const COMMANDS = {
   },
   "/queue/simple/set": {
     type: "write",
+    mode: "update",
     description: "habilitar/deshabilitar o cambiar límite de cola",
     requiresSearch: true,
     resolveFrom: "/queue/simple/print",
     allowedParams: ["disabled", "max-limit"],
+  },
+  "/queue/simple/add": {
+    type: "write",
+    mode: "create",
+    description: "crear cola simple (nuevo cliente)",
+    allowedParams: ["name", "target", "max-limit", "disabled"],
+    requiredParams: ["name", "target"],
   },
   "/ip/address/print": {
     type: "read",
@@ -34,6 +42,8 @@ const EXAMPLES = [
   '"listar todas las colas" -> {"command": "/queue/simple/print", "search": null, "explanation": "Listar colas simples"}',
   '"deshabilitar cliente carolina messi" -> {"command": "/queue/simple/set", "search": "carolina messi", "params": {"disabled": "yes"}, "explanation": "Deshabilitar cola del cliente"}',
   '"habilitar cliente juan" -> {"command": "/queue/simple/set", "search": "juan", "params": {"disabled": "no"}, "explanation": "Habilitar cola del cliente"}',
+  '"crear cliente ana perez ip 10.10.10.50 limite 20M/20M" -> {"command": "/queue/simple/add", "params": {"name": "ana perez", "target": "10.10.10.50/32", "max-limit": "20M/20M"}, "explanation": "Crear cola del cliente"}',
+  '"agregar cliente pedro con ip 192.168.1.20" -> {"command": "/queue/simple/add", "params": {"name": "pedro", "target": "192.168.1.20/32", "max-limit": "10M/10M"}, "explanation": "Crear cola del cliente"}',
   '"listar interfaces" -> {"command": "/interface/print", "explanation": "Listar interfaces del router"}',
   '"consumo de carolina messi" / "cuál es el consumo de su conexión" (con historial) -> {"command": "/queue/simple/print", "search": "carolina messi", "explanation": "Consultar consumo del cliente en colas"}',
 ];
@@ -57,7 +67,9 @@ ${commandList}
 
 Para buscar clientes, ver límites o consumo/velocidad actual usa "/queue/simple/print" con "search".
 Para modificar un cliente (habilitar, deshabilitar, cambiar límite) usa "/queue/simple/set" con "search" y "params".
-Params permitidos en set: disabled ("yes"/"no"), max-limit (ej: "50000000/50000000").
+Params permitidos en set: disabled ("yes"/"no"), max-limit (ej: "20M/20M" o "20000000/20000000").
+Para crear un cliente/cola usa "/queue/simple/add" con params name, target (IP, mejor con /32) y opcional max-limit.
+Params permitidos en add: name, target, max-limit, disabled.
 IMPORTANTE: responde SIEMPRE con JSON completo y válido, nunca vacío ni texto fuera del JSON.
 
 Ejemplos:
@@ -69,29 +81,51 @@ Si no hay params, omite "params" o usa null.
 Si la instrucción no corresponde a ningún comando, usa "command": null y explica por qué en "explanation".`;
 };
 
-const normalizeParamKey = (key) => (key === "maxLimit" ? "max-limit" : key);
+const normalizeParamKey = (key) => {
+  if (key === "maxLimit") return "max-limit";
+  return key;
+};
 
-const validateParams = (command, params) => {
+const validateParams = (command, params, { search } = {}) => {
   const def = getCommandDef(command);
   if (!def || def.type !== "write") {
     return { valid: true, params: {} };
   }
 
-  if (!params || typeof params !== "object") {
+  const source = params && typeof params === "object" ? { ...params } : {};
+
+  if (def.mode === "create" && !source.name && search) {
+    source.name = search;
+  }
+
+  if (Object.keys(source).length === 0) {
     return { valid: false, error: "Se requieren params para comandos de escritura" };
   }
 
   const sanitized = {};
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(source)) {
     const paramKey = normalizeParamKey(key);
     if (!def.allowedParams.includes(paramKey)) {
       return { valid: false, error: `Parámetro no permitido: ${key}` };
     }
-    sanitized[paramKey] = String(value);
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      sanitized[paramKey] = String(value).trim();
+    }
   }
 
   if (Object.keys(sanitized).length === 0) {
     return { valid: false, error: "Se requiere al menos un parámetro" };
+  }
+
+  if (def.requiredParams) {
+    for (const required of def.requiredParams) {
+      if (!sanitized[required]) {
+        return {
+          valid: false,
+          error: `Para crear una cola se requiere "${required}" (ej: name y target/IP).`,
+        };
+      }
+    }
   }
 
   return { valid: true, params: sanitized };

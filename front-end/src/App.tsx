@@ -65,7 +65,7 @@ const renderData = (data: unknown) => {
 };
 
 const getMessageVariant = (msg: Message): MessageVariant => {
-  if (msg.action === 'updated') return 'success';
+  if (msg.action === 'updated' || msg.action === 'created') return 'success';
   if (msg.statusCode && msg.statusCode >= 500) return 'error';
   if (msg.error || msg.details) return 'error';
   if (msg.statusCode === 400 || msg.isError) return 'warning';
@@ -141,6 +141,7 @@ const SlackMessage = ({
         </div>
         <p className="chat-text">{msg.content}</p>
         {msg.action === 'updated' ? <span className="chat-status">Actualizado</span> : null}
+        {msg.action === 'created' ? <span className="chat-status">Creado</span> : null}
         {showErrorBlock ? (
           <ErrorBlock title={errorTitle} details={errorDetails} statusCode={msg.statusCode} />
         ) : null}

@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const express = require('express');
 const cors = require('cors');
@@ -15,6 +16,9 @@ app.use(bodyParser.json());
 
 app.use('/', routes);
 
-app.listen(process.env.PORT || 3001, function() {
-	console.log('Express app running on port ' + (process.env.PORT || 3001))
+const port = process.env.PORT || 3001;
+app.listen(port, function () {
+  const keyOk = Boolean(process.env.DEEPSEEK_API_KEY && process.env.DEEPSEEK_API_KEY.trim());
+  console.log('Express app running on port ' + port);
+  console.log('DEEPSEEK_API_KEY: ' + (keyOk ? 'configurada' : 'NO configurada'));
 });
