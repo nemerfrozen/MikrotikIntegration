@@ -170,11 +170,29 @@
 .chat-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75rem;
   min-height: 49px;
   padding: 0 1.1rem;
   border-bottom: 1px solid var(--slack-border);
   background: #fff;
+}
+
+.chat-auto-speak {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slack-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chat-auto-speak input {
+  margin: 0;
+  accent-color: #007a5a;
 }
 
 .chat-title {
@@ -267,6 +285,28 @@
 .chat-time {
   font-size: 0.72rem;
   color: var(--slack-muted);
+}
+
+.chat-speak-btn {
+  margin-left: 0.25rem;
+  border: none;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  background: transparent;
+  color: var(--slack-link);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chat-speak-btn:hover {
+  background: rgba(18, 100, 163, 0.08);
+}
+
+.chat-speak-btn--active {
+  color: #e01e5a;
+  background: rgba(224, 30, 90, 0.08);
 }
 
 .chat-text {
@@ -448,6 +488,39 @@
 
 .chat-input:disabled {
   opacity: 0.6;
+}
+
+.chat-mic {
+  border: none;
+  border-radius: 4px;
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #8d8d8d;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.chat-mic:hover:not(:disabled) {
+  background: #f1f1f1;
+  color: var(--slack-text);
+}
+
+.chat-mic--active {
+  background: rgba(224, 30, 90, 0.12);
+  color: #e01e5a;
+}
+
+.chat-mic--active:hover:not(:disabled) {
+  background: rgba(224, 30, 90, 0.18);
+  color: #e01e5a;
+}
+
+.chat-mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .chat-send {

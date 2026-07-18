@@ -21,10 +21,28 @@ const normalizeHistory = (history = []) => {
     }));
 };
 
+const safeParseJson = (content) => {
+  const cleaned = String(content || "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  if (!cleaned) {
+    throw new Error("La IA devolvió una respuesta vacía. Intenta de nuevo.");
+  }
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error("La IA devolvió un formato inválido. Intenta de nuevo.");
+  }
+};
+
 const callDeepSeek = async (messages, { json = false } = {}) => {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
-    throw new Error("DEEPSEEK_API_KEY no está configurada");
+    throw new Error("DEEPSEEK_API_KEY no está configurada en el backend (.env)");
   }
 
   const body = {
@@ -37,25 +55,39 @@ const callDeepSeek = async (messages, { json = false } = {}) => {
     body.response_format = { type: "json_object" };
   }
 
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    console.error("DeepSeek fetch error:", error.message);
+    throw new Error(
+      "No se pudo conectar con DeepSeek. Revisa internet, firewall o DEEPSEEK_API_KEY."
+    );
+  }
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`DeepSeek API error: ${response.status} - ${error}`);
+    throw new Error(`DeepSeek API error: ${response.status} - ${error || "sin detalle"}`);
   }
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("DeepSeek devolvió una respuesta vacía o inválida. Intenta de nuevo.");
+  }
+
   const content = data.choices?.[0]?.message?.content;
 
-  if (!content) {
-    throw new Error("DeepSeek no devolvió respuesta");
+  if (!content || !String(content).trim()) {
+    throw new Error("DeepSeek no devolvió contenido. Intenta de nuevo.");
   }
 
   return content;
@@ -73,14 +105,14 @@ const chat = async (instructions, history = []) => {
     { json: true }
   );
 
-  return JSON.parse(content);
+  return safeParseJson(content);
 };
 
 const INTERPRET_PROMPT = `Eres un asistente de red que explica resultados de MikroTik a personas no técnicas.
 Responde en español, claro y breve (2-6 frases).
 Usa el historial de la conversación para mantener el hilo (nombres de clientes ya mencionados, acciones previas).
-- Resume lo importante: nombres, estado (activo/deshabilitado), límite de velocidad, IP/target, cantidad de resultados.
-- Si maxLimit viene en bits (ej: 50000000/50000000), conviértelo a Mbps (subida/bajada).
+- Resume lo importante: nombres, estado (activo/deshabilitado), límite de velocidad, consumo (rate/bytes), IP/target, cantidad de resultados.
+- Si maxLimit o rate vienen en bits (ej: 50000000/50000000), conviértelo a Mbps (subida/bajada).
 - Si disabled es true/yes, di que está deshabilitado; si false/no, que está activo.
 - Si no hay resultados, explícalo amablemente.
 - No inventes datos que no estén en el JSON.

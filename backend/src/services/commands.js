@@ -1,7 +1,7 @@
 const COMMANDS = {
   "/queue/simple/print": {
     type: "read",
-    description: "listar colas simples (clientes)",
+    description: "listar/buscar colas simples (clientes), límites y consumo (rate/bytes)",
     searchable: true,
     formatter: "queue",
   },
@@ -35,6 +35,7 @@ const EXAMPLES = [
   '"deshabilitar cliente carolina messi" -> {"command": "/queue/simple/set", "search": "carolina messi", "params": {"disabled": "yes"}, "explanation": "Deshabilitar cola del cliente"}',
   '"habilitar cliente juan" -> {"command": "/queue/simple/set", "search": "juan", "params": {"disabled": "no"}, "explanation": "Habilitar cola del cliente"}',
   '"listar interfaces" -> {"command": "/interface/print", "explanation": "Listar interfaces del router"}',
+  '"consumo de carolina messi" / "cuál es el consumo de su conexión" (con historial) -> {"command": "/queue/simple/print", "search": "carolina messi", "explanation": "Consultar consumo del cliente en colas"}',
 ];
 
 const getCommandDef = (command) => COMMANDS[command] || null;
@@ -54,9 +55,10 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura:
 Comandos disponibles:
 ${commandList}
 
-Para buscar clientes por nombre usa "/queue/simple/print" con "search".
+Para buscar clientes, ver límites o consumo/velocidad actual usa "/queue/simple/print" con "search".
 Para modificar un cliente (habilitar, deshabilitar, cambiar límite) usa "/queue/simple/set" con "search" y "params".
 Params permitidos en set: disabled ("yes"/"no"), max-limit (ej: "50000000/50000000").
+IMPORTANTE: responde SIEMPRE con JSON completo y válido, nunca vacío ni texto fuera del JSON.
 
 Ejemplos:
 ${EXAMPLES.join("\n")}

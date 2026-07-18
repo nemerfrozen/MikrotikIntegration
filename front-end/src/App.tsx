@@ -11,6 +11,17 @@ import {
   saveConversations,
   titleFromMessage,
 } from './conversations';
+import {
+  isSpeechRecognitionSupported,
+  isSpeechSynthesisSupported,
+  loadAutoSpeak,
+  saveAutoSpeak,
+  speak,
+  abortListening,
+  startListening,
+  stopListening,
+  stopSpeaking,
+} from './speech';
 
 const API_URL = 'http://localhost:3001';
 
@@ -80,7 +91,15 @@ const ErrorBlock = ({
   </div>
 );
 
-const SlackMessage = ({ msg }: { msg: Message }) => {
+const SlackMessage = ({
+  msg,
+  speakingId,
+  onSpeak,
+}: {
+  msg: Message;
+  speakingId: string | null;
+  onSpeak: (msg: Message) => void;
+}) => {
   const variant = getMessageVariant(msg);
   const showErrorBlock = Boolean(
     (msg.error && msg.error !== msg.content) || msg.details
@@ -89,6 +108,8 @@ const SlackMessage = ({ msg }: { msg: Message }) => {
   const errorDetails =
     msg.details && msg.details !== msg.content ? msg.details : undefined;
   const isUser = msg.role === 'user';
+  const isSpeaking = speakingId === msg.id;
+  const canSpeak = isSpeechSynthesisSupported() && !isUser;
 
   return (
     <article
@@ -106,6 +127,17 @@ const SlackMessage = ({ msg }: { msg: Message }) => {
           <time className="chat-time" dateTime={new Date(msg.createdAt).toISOString()}>
             {formatTime(msg.createdAt)}
           </time>
+          {canSpeak ? (
+            <button
+              type="button"
+              className={`chat-speak-btn${isSpeaking ? ' chat-speak-btn--active' : ''}`}
+              onClick={() => onSpeak(msg)}
+              aria-label={isSpeaking ? 'Detener lectura' : 'Escuchar respuesta'}
+              title={isSpeaking ? 'Detener' : 'Escuchar'}
+            >
+              {isSpeaking ? 'Detener' : 'Escuchar'}
+            </button>
+          ) : null}
         </div>
         <p className="chat-text">{msg.content}</p>
         {msg.action === 'updated' ? <span className="chat-status">Actualizado</span> : null}
@@ -169,7 +201,14 @@ export default function App() {
   const [activeId, setActiveId] = useState(initialStore.activeId);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const [autoSpeak, setAutoSpeak] = useState(() => loadAutoSpeak());
+  const [voiceHint, setVoiceHint] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const dictatedTextRef = useRef('');
+  const recognitionSupported = isSpeechRecognitionSupported();
+  const synthesisSupported = isSpeechSynthesisSupported();
 
   const activeConversation =
     conversations.find((c) => c.id === activeId) || conversations[0];
@@ -184,8 +223,28 @@ export default function App() {
   }, [activeId]);
 
   useEffect(() => {
+    saveAutoSpeak(autoSpeak);
+  }, [autoSpeak]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading, activeId]);
+
+  useEffect(() => {
+    abortListening();
+    stopSpeaking();
+    dictatedTextRef.current = '';
+    setListening(false);
+    setSpeakingId(null);
+    setVoiceHint('');
+  }, [activeId]);
+
+  useEffect(() => {
+    return () => {
+      abortListening();
+      stopSpeaking();
+    };
+  }, []);
 
   const updateConversationMessages = (
     conversationId: string,
@@ -212,8 +271,41 @@ export default function App() {
     );
   };
 
+  const speakMessage = (msg: Message) => {
+    if (!synthesisSupported) return;
+
+    if (speakingId === msg.id) {
+      stopSpeaking();
+      setSpeakingId(null);
+      return;
+    }
+
+    setSpeakingId(msg.id);
+    speak(msg.content, {
+      onEnd: () => setSpeakingId(null),
+      onError: () => setSpeakingId(null),
+    });
+  };
+
+  const appendAssistantMessage = (conversationId: string, message: Message) => {
+    updateConversationMessages(conversationId, (prev) => [...prev, message]);
+
+    if (autoSpeak && synthesisSupported && message.content) {
+      setSpeakingId(message.id);
+      speak(message.content, {
+        onEnd: () => setSpeakingId(null),
+        onError: () => setSpeakingId(null),
+      });
+    }
+  };
+
   const createNewConversation = () => {
     if (loading) return;
+    abortListening();
+    stopSpeaking();
+    dictatedTextRef.current = '';
+    setListening(false);
+    setSpeakingId(null);
     const next = createConversation();
     setConversations((prev) => [next, ...prev]);
     setActiveId(next.id);
@@ -248,10 +340,14 @@ export default function App() {
     }
   };
 
-  const sendMessage = async (e: FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
+  const submitMessage = async (rawText?: string) => {
+    const text = (rawText ?? input).trim();
     if (!text || loading || !activeConversation) return;
+
+    abortListening();
+    setListening(false);
+    setVoiceHint('');
+    dictatedTextRef.current = '';
 
     const conversationId = activeConversation.id;
     const userMessage: Message = {
@@ -276,30 +372,73 @@ export default function App() {
         instructions: text,
         history,
       });
-      updateConversationMessages(conversationId, (prev) => [
-        ...prev,
-        buildAssistantMessage(parseChatPayload(response.data)),
-      ]);
+      appendAssistantMessage(
+        conversationId,
+        buildAssistantMessage(parseChatPayload(response.data))
+      );
     } catch (err: unknown) {
       const axiosError = getAxiosErrorData(err);
 
       if (axiosError?.data !== undefined) {
-        updateConversationMessages(conversationId, (prev) => [
-          ...prev,
-          buildAssistantMessage(parseChatPayload(axiosError.data), axiosError.statusCode),
-        ]);
+        appendAssistantMessage(
+          conversationId,
+          buildAssistantMessage(parseChatPayload(axiosError.data), axiosError.statusCode)
+        );
       } else {
-        updateConversationMessages(conversationId, (prev) => [
-          ...prev,
+        appendAssistantMessage(
+          conversationId,
           buildAssistantMessage({
             error: 'No se pudo conectar con el servidor',
             details: 'Verifica que el backend esté activo en http://localhost:3001',
-          }),
-        ]);
+          })
+        );
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleListening = () => {
+    if (!recognitionSupported || loading) return;
+
+    if (listening) {
+      stopListening();
+      return;
+    }
+
+    stopSpeaking();
+    setSpeakingId(null);
+    dictatedTextRef.current = '';
+    setListening(true);
+    setVoiceHint('Escuchando… al terminar se enviará');
+
+    startListening({
+      onResult: (text) => {
+        dictatedTextRef.current = text;
+        setInput(text);
+      },
+      onError: (message) => {
+        setVoiceHint(message);
+        setListening(false);
+      },
+      onEnd: () => {
+        setListening(false);
+        const text = dictatedTextRef.current.trim();
+        if (text) {
+          setVoiceHint('');
+          void submitMessage(text);
+          return;
+        }
+        setVoiceHint((prev) =>
+          prev === 'Escuchando… al terminar se enviará' ? '' : prev
+        );
+      },
+    });
+  };
+
+  const sendMessage = async (e: FormEvent) => {
+    e.preventDefault();
+    await submitMessage();
   };
 
   const sortedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
@@ -355,12 +494,27 @@ export default function App() {
             <h1 className="chat-title"># {activeConversation?.title || 'asistente-ia'}</h1>
             <p className="chat-subtitle">Consulta y gestiona tu router en lenguaje natural</p>
           </div>
+          {synthesisSupported ? (
+            <label className="chat-auto-speak">
+              <input
+                type="checkbox"
+                checked={autoSpeak}
+                onChange={(e) => setAutoSpeak(e.target.checked)}
+              />
+              Auto voz
+            </label>
+          ) : null}
         </header>
 
         <main className="chat-main">
           <div className="chat-messages">
             {messages.map((msg) => (
-              <SlackMessage key={msg.id} msg={msg} />
+              <SlackMessage
+                key={msg.id}
+                msg={msg}
+                speakingId={speakingId}
+                onSpeak={speakMessage}
+              />
             ))}
             {loading && (
               <article className="chat-message">
@@ -393,12 +547,37 @@ export default function App() {
               <input
                 type="text"
                 className="chat-input"
-                placeholder={`Mensaje a #${activeConversation?.title || 'asistente-ia'}`}
+                placeholder={
+                  listening
+                    ? 'Escuchando… habla ahora'
+                    : `Mensaje a #${activeConversation?.title || 'asistente-ia'}`
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 disabled={loading}
                 aria-label="Mensaje para el asistente"
               />
+              <button
+                type="button"
+                className={`chat-mic${listening ? ' chat-mic--active' : ''}`}
+                onClick={toggleListening}
+                disabled={loading || !recognitionSupported}
+                aria-label={listening ? 'Detener micrófono' : 'Hablar'}
+                title={
+                  recognitionSupported
+                    ? listening
+                      ? 'Detener micrófono'
+                      : 'Hablar'
+                    : 'Voz no soportada en este navegador'
+                }
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11h-2z"
+                  />
+                </svg>
+              </button>
               <button
                 className="chat-send"
                 type="submit"
@@ -415,7 +594,12 @@ export default function App() {
               </button>
             </form>
           </div>
-          <p className="chat-hint">Enter para enviar · Ej: cliente carolina messi</p>
+          <p className="chat-hint">
+            {voiceHint ||
+              (!recognitionSupported && !synthesisSupported
+                ? 'Voz no disponible en este navegador (prueba Chrome o Edge)'
+                : 'Micrófono: habla y al terminar se envía · Enter para escribir')}
+          </p>
         </footer>
       </div>
     </div>

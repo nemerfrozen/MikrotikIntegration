@@ -10,4 +10,5 @@ test('renderiza el asistente de chat', () => {
   render(<App />);
   expect(screen.getByText(/Nueva conversación/i)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: /\+ Nueva conversación/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Hablar|Detener micrófono/i })).toBeInTheDocument();
 });
