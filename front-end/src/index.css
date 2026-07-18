@@ -1,13 +1,41 @@
+:root {
+  --slack-aubergine: #3f0e40;
+  --slack-aubergine-hover: #350d36;
+  --slack-sidebar-active: #1164a3;
+  --slack-green: #2bac76;
+  --slack-text: #1d1c1d;
+  --slack-muted: #616061;
+  --slack-link: #1264a3;
+  --slack-border: #e8e8e8;
+  --slack-hover: #f8f8f8;
+  --slack-bg: #ffffff;
+  --slack-composer-border: #dddddd;
+  --slack-danger: #e01e5a;
+  --slack-warn: #ecb22e;
+  --slack-ok: #2eb67d;
+  --slack-font: 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --slack-mono: 'IBM Plex Mono', Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  color: var(--slack-text);
+  font-family: var(--slack-font);
+  background: #1a1d21;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: var(--slack-mono);
 }

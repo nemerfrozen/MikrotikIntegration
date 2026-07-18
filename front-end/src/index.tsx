@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import Queue from './Queue';
 import reportWebVitals from './reportWebVitals';
 // bootstrap
 import 'bootstrap/dist/css/bootstrap.css';
@@ -12,7 +11,7 @@ const root = ReactDOM.createRoot(
 );
 root.render(
   <React.StrictMode>
-    <Queue />
+    <App />
   </React.StrictMode>
 );
 

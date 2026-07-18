@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.get('/interface', controllers.interfaces);
 router.get('/queue', controllers.queue);
+router.post('/chat', controllers.chat);
 router.get('/', controllers.home);
 
 module.exports = router;
